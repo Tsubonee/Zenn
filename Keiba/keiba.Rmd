@@ -9,7 +9,7 @@ output: html_notebook
 # install.packages("httr")
 # install.packages("dplyr")
 # install.packages("readr")
-install.packages("RSelenium")
+# install.packages("RSelenium")
 
 library(rvest)
 library(httr) #mozi bake
