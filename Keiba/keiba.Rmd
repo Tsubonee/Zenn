@@ -1,0 +1,81 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+#install package
+```{r}
+# install.packages("rvest")
+# install.packages("httr")
+# install.packages("dplyr")
+# install.packages("readr")
+install.packages("RSelenium")
+
+library(rvest)
+library(httr) #mozi bake
+library(dplyr)
+library(readr)
+library(RSelenium)
+library(data.table)
+library(writexl)
+```
+
+
+```{r}
+url <- "https://db.netkeiba.com/race/202408050611/"  # 2024 菊花賞 
+html <- read_html(url, encoding = "euc-jp")
+
+Sys.sleep(1) #アクセス不可軽減
+tbl <- html_element(html, css = "#contents_liquid > table") #copy selector
+df <- html_table(tbl)
+
+fwrite(df, "kikka_2024_results.csv", row.names = FALSE, bom = TRUE)
+write_xlsx(df, "kikka_2024_results.xlsx")
+
+```
+
+
+
+#scraping
+```{r}
+
+# List of URLs for the 菊花賞 (2019 to 2024)
+years <- 2019:2024
+base_url <- "https://db.netkeiba.com/race/"
+race_ids <- c("201908040711", "202008040611", "202109040611", "202209040711", "202308020711", "202408050611")
+urls <- paste0(base_url, race_ids, "/")
+
+all_data <- list()
+
+for (i in seq_along(urls)) {
+  url <- urls[i]
+  year <- years[i]
+  
+  html <- read_html(url, encoding = "euc-jp")
+  Sys.sleep(1) # Load reduction for access
+  
+  tbl <- html_element(html, css = "#contents_liquid > table") # selector
+  df <- html_table(tbl, fill = TRUE)
+  
+  df$Year <- year
+  
+  all_data[[i]] <- df
+}
+
+# combined data
+final_data <- bind_rows(all_data)
+
+# save csv file
+fwrite(final_data, "kikka_2019_2024_results.csv", row.names = FALSE, bom = TRUE)
+
+# save excel file
+write_xlsx(final_data, "kikka_2019_2024_results.xlsx")
+
+
+```
+
+read file
+```{r}
+data <- read.csv()
+```
+
