@@ -10,6 +10,7 @@ output: html_notebook
 # install.packages("dplyr")
 # install.packages("readr")
 # install.packages("RSelenium")
+# install.packages("ARTool")
 
 library(rvest)
 library(httr) #mozi bake
@@ -18,9 +19,11 @@ library(readr)
 library(RSelenium)
 library(data.table)
 library(writexl)
+library(ggplot2)
+library(ARTool)
 ```
 
-
+#only one year data
 ```{r}
 url <- "https://db.netkeiba.com/race/202408050611/"  # 2024 菊花賞 
 html <- read_html(url, encoding = "euc-jp")
@@ -36,7 +39,7 @@ write_xlsx(df, "kikka_2024_results.xlsx")
 
 
 
-#scraping
+#scraping from 2019 to 2024
 ```{r}
 
 # List of URLs for the 菊花賞 (2019 to 2024)
@@ -76,6 +79,136 @@ write_xlsx(final_data, "kikka_2019_2024_results.xlsx")
 
 read file
 ```{r}
-data <- read.csv()
+path <- "./kikka_2019_2024_results.csv"
+data <- read.csv(path, na = "")
+head(data)
+```
+
+```{r}
+
+# タイム列を数値型に変換
+data$Time <- sapply(data$タイム, function(x) {
+  # 分と秒に分割
+  time_parts <- strsplit(as.character(x), ":")[[1]]
+  minutes <- as.numeric(time_parts[1])  # 分を抽出して数値型に変換
+  seconds <- as.numeric(time_parts[2])  # 秒を抽出して数値型に変換
+  # 合計秒数を計算
+  total_seconds <- minutes * 60 + seconds
+  return(total_seconds)
+})
+
+
+```
+
+
+```{r}
+
+ggplot(data, aes(x = Time)) +
+  geom_histogram(binwidth = 2, fill = "blue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution of Horse Race Times (Seconds)",
+    x = "Time (seconds)",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+# 増減部分を抽出してカテゴリ化
+data$馬体重変化 <- gsub(".*\\(([-+0-9]+)\\)", "\\1", data$馬体重)  # 数値部分を抽出
+data$馬体重変化 <- as.numeric(gsub("\\+|\\(|\\)", "", data$馬体重変化))  # "+"や括弧を除去して数値化
+
+# カテゴリ列を作成
+data$馬体重カテゴリ <- ifelse(data$馬体重変化 > 0, "プラス", 
+                            ifelse(data$馬体重変化 < 0, "マイナス", "変化なし"))
+
+# 確認
+table(data$馬体重カテゴリ)
+
+
+```
+
+```{r}
+# カテゴリごとのタイムの正規性を確認
+by(data$Time, data$馬体重カテゴリ, function(x) shapiro.test(x))
+```
+
+```{r}
+data$馬体重カテゴリ <- as.factor(data$馬体重カテゴリ)
+
+art_model <- art(Time ~ 馬体重カテゴリ, data = data)
+anova(art_model)
+```
+
+```{r}
+model_time <- lm(Time ~ 上り, data = data)
+summary(model_time)
+```
+
+```{r}
+library(ggplot2)
+
+# 馬体重カテゴリごとの着順の箱ひげ図
+ggplot(data, aes(x = 馬体重カテゴリ, y = 着順, fill = 馬体重カテゴリ)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(
+    title = "馬体重カテゴリと着順の関係",
+    x = "馬体重カテゴリ",
+    y = "着順（順位）"
+  ) +
+  theme_minimal()
+
+```
+
+```{r}
+# 騎手ごとに着順の箱ひげ図を作成
+library(ggplot2)
+ggplot(data, aes(x = 騎手, y = 着順, fill = 騎手)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "騎手と着順の関係", x = "騎手", y = "着順") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # 騎手名を45度傾ける
+
+# ANOVAで騎手ごとの着順の有意差を検証
+anova_result <- aov(着順 ~ 騎手, data = data)
+summary(anova_result)
+
+
+```
+
+```{r}
+# トップ3に入ったかどうかを示す列を作成
+data$トップ3 <- ifelse(data$着順 <= 3, 1, 0)
+
+# 確認
+table(data$トップ3)
+
+data$ルメール <- ifelse(data$騎手 == "ルメール", 1, 0)
+
+# 確認
+table(data$ルメール)
+
+# クロス集計表を作成
+table_top3 <- table(data$トップ3, data$ルメール)
+
+# カイ二乗検定を実行
+chi_test <- chisq.test(table_top3)
+
+# 結果を表示
+print(chi_test)
+```
+
+```{r}
+# ルメールのトップ3率
+prop_ルメール <- sum(data$トップ3[data$ルメール == 1]) / sum(data$ルメール)
+
+# その他の騎手のトップ3率
+prop_他 <- sum(data$トップ3[data$ルメール == 0]) / sum(data$ルメール == 0)
+
+# 結果を表示
+cat("ルメールのトップ3率:", prop_ルメール, "\n")
+cat("その他の騎手のトップ3率:", prop_他, "\n")
+
 ```
 
